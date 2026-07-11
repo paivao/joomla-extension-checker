@@ -68,7 +68,7 @@ class FeedItem(NamedTuple):
             data['install_data'] = str(data['install_data'])
         return cls(**{k: data.get(k) for k in cls._fields})
 
-    def format(self):
+    def format(self) -> str:
         _format = f"[{self.statusText}] [{self.risk_level or 'UNKNOWN'}] [{self.id}] {self.title}"
         if self.created or self.modified:
             _format += f'\n  Created: {self.created}\tModified: {self.modified}'
@@ -88,6 +88,7 @@ class FeedItem(NamedTuple):
             _format += f'\n  Update notice: {_upd}'
         if _dat := self.install_data:
             _format += f'\n  {_dat}'
+        return _format
 
 class Feed(NamedTuple):
     """

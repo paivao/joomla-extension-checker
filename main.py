@@ -120,8 +120,8 @@ def main():
     with dbm:
         for ext in local_extensions.values():
             vuln_findings[ext.name] = dbm.search_extensions_fts(ext.name)
-            if ext.author:
-                vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
+            #if ext.author:
+            #    vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
             if ext.description:
                 vuln_findings[ext.name] += dbm.search_extensions_fts(ext.name)
             if len(vuln_findings[ext.name]) == 0:
