@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from joomla_feed_checker.models import ExtensionMetadata
+from .utils import find_files_recursively
 
 
 class JoomlaExtensionScanner:
@@ -45,8 +46,11 @@ class JoomlaExtensionScanner:
         search_paths = [
             (self.base_path / 'administrator' / 'components'),
             (self.base_path / 'administrator' / 'modules'),
+            (self.base_path / 'administrator' / 'templates'),
             (self.base_path / 'modules'),
             (self.base_path / 'plugins'),
+            (self.base_path / 'components'),
+            (self.base_path / 'templates'),
         ]
 
         for root_dir in search_paths:
@@ -55,39 +59,8 @@ class JoomlaExtensionScanner:
 
             # Find all XML files
             try:
-                xml_files = list(root_dir.rglob('*.xml'))
-
+                xml_files = find_files_recursively(root_dir)
                 for xml_file in xml_files:
-                    # Only process files directly inside extension directories (depth 1 or 2 for plugins)
-                    try:
-                        relative_path = str(xml_file.relative_to(self.base_path))
-                        parts = relative_path.replace('\\', '/').split('/')
-
-                        # Check if file is at appropriate depth
-                        depth_ok = False
-
-                        # For components/modules: administrator/components/*/*.xml or modules/*/*.xml
-                        if 'administrator/components' in str(root_dir):
-                            depth_ok = len(parts) == 4 and parts[1] == 'components'
-                        elif 'administrator/modules' in str(root_dir):
-                            depth_ok = len(parts) == 4 and parts[1] == 'modules'
-                        # For modules: modules/*/*.xml or modules/*/*/.xml (plugins can be deeper)
-                        elif 'administrator/modules' not in str(root_dir) and 'modules' in str(root_dir):
-                            if len(parts) == 4 and parts[1] == 'modules':
-                                depth_ok = True
-                            elif len(parts) == 5 and parts[2] == 'plugins':
-                                depth_ok = True
-                        # For plugins: plugins/*/</**.xml (can be deeper)
-                        elif 'plugins' in str(root_dir):
-                            if len(parts) >= 5 and 'plugins' in parts:
-                                depth_ok = True
-
-                        if not depth_ok:
-                            continue
-
-                    except (IndexError, ValueError):
-                        continue
-
                     try:
                         extension_data = self.parse_extension_file(xml_file)
                         if extension_data:

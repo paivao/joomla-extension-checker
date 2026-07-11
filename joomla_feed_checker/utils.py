@@ -1,5 +1,6 @@
 import json
 import hashlib
+from pathlib import Path
 
 def calculate_checksum(data: dict) -> str:
     """
@@ -14,3 +15,12 @@ def calculate_checksum(data: dict) -> str:
     # Create a JSON representation without the wrapper structure for checksum
     feed_content = json.dumps(data).replace("\n", "").replace(" ", "").replace("\t", "").replace("/", "\\/")
     return hashlib.sha256(feed_content.encode('utf-8')).hexdigest()
+
+def find_files_recursively(path: Path, ext: str = '.xml') -> list[Path]:
+    metadatas = []
+    for child in path.iterdir():
+        if child.suffix == ext:
+            return [child]
+        if child.is_dir():
+            metadatas += find_files_recursively(child)
+    return metadatas
