@@ -178,7 +178,7 @@ class DbManager:
 
         if not row:
             return None
-        _feed = Feed._make(row)
+        _feed = Feed(**row)
         return _feed._replace(items=self.get_all_feed_items())
 
     def get_all_feed_items(self) -> list[FeedItem]:
@@ -231,6 +231,6 @@ class DbManager:
             INNER JOIN items_fts5 f ON i.id = f.rowid
             WHERE items_fts5 MATCH ?
             ORDER BY f.rank DESC
-        """, (query,))
+        """, (f'"{query}"',))
 
         return [(FeedItem._make(row[:-1]),row[-1]) for row in cursor.fetchall()]

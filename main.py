@@ -76,7 +76,7 @@ def main():
     print("Target URL: https://extensions.joomla.org/vel-feed")
     print(f"Database: {db_path}")
 
-    dbm = DbManager(str(db_dir))
+    dbm = DbManager(str(db_path))
     with dbm:
         dbm.create_database()
         feed = get_feed(dbm)
@@ -125,7 +125,7 @@ def main():
             if ext.description:
                 vuln_findings[ext.name] += dbm.search_extensions_fts(ext.name)
             if len(vuln_findings[ext.name]) == 0:
-                vuln_findings[ext.name].pop()
+                vuln_findings.pop(ext.name)
 
     print("Showing findings:")
     for ext, findings in vuln_findings.items():

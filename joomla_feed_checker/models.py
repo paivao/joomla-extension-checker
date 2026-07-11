@@ -64,7 +64,8 @@ class FeedItem(NamedTuple):
         if 'data' in data:
             data = data['data']
 
-        data['install_data'] = str(data['install_data'])
+        if 'install_data' in data:
+            data['install_data'] = str(data['install_data'])
         return cls(**{k: data.get(k) for k in cls._fields})
 
     def format(self):
