@@ -75,7 +75,7 @@ class FeedItem(NamedTuple):
         if self.created or self.modified:
             _format += f'\n{_indent}Created: {self.created}\tModified: {self.modified}'
         if des := self.description:
-            _format += f'\n{_indent}{html.unescape(des).replace(_0xa, _0xa+_indent)}'
+            _format += f'\n{_indent}-----\n{_indent}{html.unescape(des).replace(_0xa, _0xa+_indent)}\n{_indent}-----'
         if _rec := self.recommendation:
             _format += f'\n{_indent}Recommendation: {_rec}'
         if _jed := self.jed:
@@ -89,7 +89,7 @@ class FeedItem(NamedTuple):
         if _upd := self.update_notice:
             _format += f'\n{_indent}Update notice: {_upd}'
         if _dat := self.install_data:
-            _format += f'\n{_indent}{_dat}'
+            _format += f'\n{_indent}Install data: "{_dat}"'
         return _format
 
 class Feed(NamedTuple):
