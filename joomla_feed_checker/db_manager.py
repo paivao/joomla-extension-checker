@@ -5,7 +5,7 @@ Handles database operations including comparison of feed items with local extens
 
 import sqlite3
 from typing import Optional
-from models import Feed, FeedItem
+from .models import Feed, FeedItem
 
 class DbManager:
     """
@@ -67,7 +67,7 @@ class DbManager:
             CREATE TABLE IF NOT EXISTS items (
                 id INTEGER PRIMARY KEY,
                 title TEXT NOT NULL,
-                description TEXT NOT NULL,
+                description TEXT,
                 status INTEGER,
                 jed TEXT,
                 cve_id TEXT,
@@ -144,12 +144,13 @@ class DbManager:
         cursor = self.__get_cursor()
 
         # Items field filtered
-        insert_query = f"INSERT OR REPLACE INTO items ({', '.join(Feed._fields[:-1])} VALUES ({', '.join(['?'] * (len(Feed._fields)-1))})"
+        insert_query = f"INSERT OR REPLACE INTO feed ({','.join(Feed._fields[:-1])}) VALUES ({','.join(['?'] * (len(Feed._fields)-1))})"
         cursor.execute(insert_query, feed_data[:-1])
 
         inserted_count = 0
 
-        insert_query = f"INSERT OR REPLACE INTO items ({', '.join(FeedItem._fields)} VALUES ({', '.join(['?'] * len(FeedItem._fields))})"
+        insert_query = f"INSERT OR REPLACE INTO items ({', '.join(FeedItem._fields)}) VALUES ({', '.join(['?'] * len(FeedItem._fields))})"
+
         for item in feed_data.items:
             try:
                 cursor.execute(insert_query, item)
@@ -157,6 +158,7 @@ class DbManager:
 
             except sqlite3.Error as e:
                 print(f"Error inserting item {item.id}: {e}")
+                print(f"\t{item}")
 
         cursor.connection.commit()
         return inserted_count
@@ -170,7 +172,7 @@ class DbManager:
         """
         cursor = self.__get_cursor()
 
-        cursor.execute(f"SELECT {Feed._fields[:-1]} FROM feed LIMIT 1")
+        cursor.execute(f"SELECT {','.join(Feed._fields[:-1])} FROM feed LIMIT 1")
 
         row = cursor.fetchone()
 

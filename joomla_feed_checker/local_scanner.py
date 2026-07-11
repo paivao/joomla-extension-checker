@@ -122,7 +122,7 @@ class JoomlaExtensionScanner:
             return ExtensionMetadata(
                 xml_path=str(xml_path),
                 type=root.attrib.get('type'),
-                name=getattr(root.find('author'), 'text', ''),
+                name=getattr(root.find('name'), 'text', ''),
                 author=getattr(root.find('author'), 'text', None),
                 version=getattr(root.find('version'), 'text', None),
                 creation_date=getattr(root.find('creationDate'), 'text', None),

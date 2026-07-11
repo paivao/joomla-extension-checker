@@ -78,6 +78,7 @@ def main():
 
     dbm = DbManager(str(db_dir))
     with dbm:
+        dbm.create_database()
         feed = get_feed(dbm)
     print(f"Feed version: {feed.api_version}")
 
@@ -123,12 +124,14 @@ def main():
                 vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
             if ext.description:
                 vuln_findings[ext.name] += dbm.search_extensions_fts(ext.name)
+            if len(vuln_findings[ext.name]) == 0:
+                vuln_findings[ext.name].pop()
 
     print("Showing findings:")
     for ext, findings in vuln_findings.items():
-        print(f"Found this data for extension {ext}")
+        print(f"Found this data for extension {ext}: {local_extensions[ext].xml_path}")
         for item, score in findings:
-            print(f"{item.title} with score {score}, affected version: {item.vulnerable_version}, patched at: {item.patch_version}")
+            print(f"(score={score}) {item.format()}")
 
 if __name__ == '__main__':
     main()

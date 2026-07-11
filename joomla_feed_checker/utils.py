@@ -12,5 +12,5 @@ def calculate_checksum(data: dict) -> str:
         Lowercase hex digest of SHA256 hash of serialized data
     """
     # Create a JSON representation without the wrapper structure for checksum
-    feed_content = json.dumps(data.get('data')).replace("\n", "").replace(" ", "").replace("\t", "").replace("/", "\\/")
+    feed_content = json.dumps(data).replace("\n", "").replace(" ", "").replace("\t", "").replace("/", "\\/")
     return hashlib.sha256(feed_content.encode('utf-8')).hexdigest()

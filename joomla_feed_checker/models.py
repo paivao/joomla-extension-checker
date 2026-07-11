@@ -4,6 +4,7 @@ Based on the Joomla Extensions API response format.
 """
 
 from typing import Any, Optional, Union, NamedTuple
+import html
 
 from joomla_feed_checker.utils import calculate_checksum
 
@@ -63,7 +64,29 @@ class FeedItem(NamedTuple):
         if 'data' in data:
             data = data['data']
 
+        data['install_data'] = str(data['install_data'])
         return cls(**{k: data.get(k) for k in cls._fields})
+
+    def format(self):
+        _format = f"[{self.statusText}] [{self.risk_level or 'UNKNOWN'}] [{self.id}] {self.title}"
+        if self.created or self.modified:
+            _format += f'\n  Created: {self.created}\tModified: {self.modified}'
+        if des := self.description:
+            _format += f'\n  {html.unescape(des).replace("\\r", "").replace("\\n", "\n  ")}'
+        if _rec := self.recommendation:
+            _format += f'\n  Recommendation: {_rec}'
+        if _jed := self.jed:
+            _format += f'\n  JED: {_jed}'
+        if self.cve_id or self.cwe_id:
+            _format += f'\n  CVE: {self.cve_id}\tCWE: {self.cwe_id}'
+        if self.cvss30_base or self.cvss30_base_score:
+            _format += f'\n  CVS3: {self.cvss30_base} ({self.cvss30_base_score})'
+        if self.start_version or self.vulnerable_version or self.patch_version:
+            _format += f'\n  Start version: {self.start_version}, Vulnerable: {self.vulnerable_version}, Patched: {self.patch_version}'
+        if _upd := self.update_notice:
+            _format += f'\n  Update notice: {_upd}'
+        if _dat := self.install_data:
+            _format += f'\n  {_dat}'
 
 class Feed(NamedTuple):
     """
@@ -113,7 +136,7 @@ class Feed(NamedTuple):
         """
         return cls(checksum=calculate_checksum(data),
             items=[FeedItem.from_dict(item) for item in data.get('items', [])]
-            , **{k: data.get(k,'') for k in cls._fields[:-1]})
+            , **{k: data.get(k,'') for k in cls._fields[:-2]})
 
     def check_itself(self) -> bool:
         _dict = self.to_dict()
