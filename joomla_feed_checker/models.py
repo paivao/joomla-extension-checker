@@ -71,7 +71,7 @@ class FeedItem(NamedTuple):
     def format(self, indent: int = 4) -> str:
         _indent = ' ' * indent
         _0xa = "\n"
-        _format = f"[{self.statusText}] [{self.risk_level or 'UNKNOWN'}] [{self.id}] {self.title}"
+        _format = f"[STATUS:{self.statusText}] [RISK:{self.risk_level or 'UNKNOWN'}] [ID:{self.id}] {self.title}"
         if self.created or self.modified:
             _format += f'\n{_indent}Created: {self.created}\tModified: {self.modified}'
         if des := self.description:
