@@ -139,6 +139,7 @@ class Feed(NamedTuple):
 class ExtensionMetadata(NamedTuple):
     xml_path: str
     type: Optional[str]
+    name: str
     author: Optional[str]
     version: Optional[str]
     creation_date: Optional[str]

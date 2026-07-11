@@ -3,11 +3,9 @@ Local Scanner module for Joomla extensions.
 Scans Joomla installation directories to find XML extension files.
 """
 
-import os
-import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Optional
 
 from joomla_feed_checker.models import ExtensionMetadata
 
@@ -23,18 +21,18 @@ class JoomlaExtensionScanner:
     - <base_path>/plugins/*/</**.xml (recursive search)
     """
 
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: Path):
         """
         Initialize scanner with base path.
 
         Args:
             base_path: Root directory of Joomla installation
         """
-        self.base_path = Path(base_path).resolve()
+        self.base_path = base_path.resolve()
         if not self.base_path.exists():
             raise ValueError(f"Base path does not exist: {base_path}")
 
-    def scan_for_extensions(self) -> List[ExtensionMetadata]:
+    def scan_for_extensions(self) -> list[ExtensionMetadata]:
         """
         Scan for all extension XML files in Joomla directories.
 
@@ -124,6 +122,7 @@ class JoomlaExtensionScanner:
             return ExtensionMetadata(
                 xml_path=str(xml_path),
                 type=root.attrib.get('type'),
+                name=getattr(root.find('author'), 'text', ''),
                 author=getattr(root.find('author'), 'text', None),
                 version=getattr(root.find('version'), 'text', None),
                 creation_date=getattr(root.find('creationDate'), 'text', None),
@@ -134,7 +133,7 @@ class JoomlaExtensionScanner:
             print(f"Warning: Could not parse XML file {xml_path}: {e}")
             return None
 
-def scan_joomla_extensions(base_path: str) -> list[ExtensionMetadata]:
+def scan_joomla_extensions(base_path: Path) -> list[ExtensionMetadata]:
     """
     Convenience function to scan Joomla extensions.
 

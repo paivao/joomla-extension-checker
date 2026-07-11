@@ -4,12 +4,8 @@ Handles database operations including comparison of feed items with local extens
 """
 
 import sqlite3
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 from models import Feed, FeedItem
-
-from joomla_feed_checker.models import Feed
-
 
 class DbManager:
     """
@@ -27,109 +23,112 @@ class DbManager:
         Args:
             db_path: Path to SQLite database file
         """
-        self.__db_path = db_path
+        self.__db_path: str = db_path
+        self.__conn: Optional[sqlite3.Connection] = None
 
     def __enter__(self):
+        if self.__conn is not None:
+            return
         self.__conn = sqlite3.connect(self.__db_path)
+        self.__conn.row_factory = sqlite3.Row
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.__conn is None:
+            return
+        self.__conn.close()
+        self.__conn = None
 
-    def get_connection(self) -> sqlite3.Connection:
-        """Get database connection."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def __get_cursor(self):
+        if self.__conn is None:
+            raise Exception("connection is not opened")
+        return self.__conn.cursor()
 
     def create_database(self):
         """
         Create SQLite database with required schema.
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        cursor = self.__get_cursor()
 
-        try:
+        # Create feed table with one row (singleton table)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feed (
+                api_version TEXT NOT NULL,
+                api_version_name TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                license TEXT NOT NULL,
+                checksum TEXT NOT NULL,
+                PRIMARY KEY (api_version)
+            )
+        """)
 
-            # Create feed table with one row (singleton table)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS feed (
-                    api_version TEXT NOT NULL,
-                    api_version_name TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    license TEXT NOT NULL,
-                    checksum TEXT NOT NULL,
-                    PRIMARY KEY (api_version)
-                )
-            """)
+        # Create items table for extension listings
+        # TODO: sync with feed ty
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status INTEGER,
+                jed TEXT,
+                cve_id TEXT,
+                cwe_id TEXT,
+                risk_level TEXT,
+                recommendation TEXT,
+                cvss30_base TEXT,
+                cvss30_base_score TEXT,
+                start_version TEXT,
+                vulnerable_version TEXT,
+                patch_version TEXT,
+                update_notice TEXT,
+                install_data TEXT,
+                created TEXT,
+                modified TEXT,
+                statusText TEXT
+            )
+        """)
 
-            # Create items table for extension listings
-            # TODO: sync with feed ty
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS items (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    status INTEGER,
-                    jed TEXT,
-                    cve_id TEXT,
-                    cwe_id TEXT,
-                    risk_level TEXT,
-                    recommendation TEXT,
-                    cvss30_base TEXT,
-                    cvss30_base_score TEXT,
-                    start_version TEXT,
-                    vulnerable_version TEXT,
-                    patch_version TEXT,
-                    update_notice TEXT,
-                    install_data TEXT,
-                    created TEXT,
-                    modified TEXT,
-                    statusText TEXT
-                )
-            """)
+        # Create FTS5 virtual table for full-text search on title and description
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS items_fts5 USING fts5(
+                title,
+                description,
+                content=items,
+                content_rowid=id
+            )
+        """)
 
-            # Create FTS5 virtual table for full-text search on title and description
-            cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS items_fts5 USING fts5(
-                    title,
-                    description,
-                    content=items,
-                    content_rowid=id
-                )
-            """)
+        # Add trigger to populate FTS5 table when item is inserted
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS items_after_insert
+            AFTER INSERT ON items
+            BEGIN
+                INSERT INTO items_fts5(rowid, title, description)
+                VALUES(NEW.id, NEW.title, NEW.description);
+            END
+        """)
 
-            # Add trigger to populate FTS5 table when item is inserted
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS items_after_insert
-                AFTER INSERT ON items
-                BEGIN
-                    INSERT INTO items_fts5(rowid, title, description)
-                    VALUES(NEW.id, NEW.title, NEW.description);
-                END
-            """)
+        # Add trigger to delete from FTS5 when item is deleted
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS items_after_delete
+            AFTER DELETE ON items
+            BEGIN
+                INSERT INTO items_fts5(items_fts5, rowid, title, description)
+                VALUES('delete', OLD.id, OLD.title, OLD.description);
+            END
+        """)
 
-            # Add trigger to delete from FTS5 when item is deleted
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS items_after_delete
-                AFTER DELETE ON items
-                BEGIN
-                    INSERT INTO items_fts5(items_fts5, rowid, title, description)
-                    VALUES('delete', OLD.id, OLD.title, OLD.description);
-                END
-            """)
-
-            # Add trigger to update FTS5 when item is updated
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS items_after_update
-                AFTER UPDATE ON items
-                BEGIN
-                    INSERT INTO items_fts5(items_fts5, rowid, title, description)
-                    VALUES('delete', OLD.id, OLD.title, OLD.description);
-                    INSERT INTO items_fts5(rowid, title, description)
-                    VALUES(NEW.id, NEW.title, NEW.description);
-                END
-            """)
-            conn.commit()
-        finally:
-            conn.close()
+        # Add trigger to update FTS5 when item is updated
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS items_after_update
+            AFTER UPDATE ON items
+            BEGIN
+                INSERT INTO items_fts5(items_fts5, rowid, title, description)
+                VALUES('delete', OLD.id, OLD.title, OLD.description);
+                INSERT INTO items_fts5(rowid, title, description)
+                VALUES(NEW.id, NEW.title, NEW.description);
+            END
+        """)
+        cursor.connection.commit()
 
     def save_feed_to_db(self, feed_data: Feed) -> int:
         """
@@ -142,8 +141,7 @@ class DbManager:
         Returns:
             Number of items inserted (or 1 for feed record)
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        cursor = self.__get_cursor()
 
         # Items field filtered
         insert_query = f"INSERT OR REPLACE INTO items ({', '.join(Feed._fields[:-1])} VALUES ({', '.join(['?'] * (len(Feed._fields)-1))})"
@@ -160,7 +158,7 @@ class DbManager:
             except sqlite3.Error as e:
                 print(f"Error inserting item {item.id}: {e}")
 
-        conn.commit()
+        cursor.connection.commit()
         return inserted_count
 
     def get_feed(self) -> Optional[Feed]:
@@ -170,22 +168,18 @@ class DbManager:
         Returns:
             Dictionary with feed info or None if not found
         """
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
+        cursor = self.__get_cursor()
 
-            cursor.execute(f"SELECT {Feed._fields[:-1]} FROM feed LIMIT 1")
+        cursor.execute(f"SELECT {Feed._fields[:-1]} FROM feed LIMIT 1")
 
-            row = cursor.fetchone()
+        row = cursor.fetchone()
 
-            if not row:
-                return None
-            _feed = Feed._make(row)
-        finally:
-            conn.close()
+        if not row:
+            return None
+        _feed = Feed._make(row)
         return _feed._replace(items=self.get_all_feed_items())
 
-    def get_all_feed_items(self) -> List[FeedItem]:
+    def get_all_feed_items(self) -> list[FeedItem]:
         """
         Get all feed items from database.
 
@@ -195,16 +189,9 @@ class DbManager:
         Returns:
             List of item dictionaries
         """
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
-
-            cursor.execute(f"SELECT {','.join(FeedItem._fields)} FROM items")
-
-            return list(map(FeedItem._make, cursor.fetchall()))
-
-        finally:
-            conn.close()
+        cursor = self.__get_cursor()
+        cursor.execute(f"SELECT {','.join(FeedItem._fields)} FROM items")
+        return list(map(FeedItem._make, cursor.fetchall()))
 
     def get_item_by_id(self, item_id: int) -> Optional[FeedItem]:
         """
@@ -217,19 +204,14 @@ class DbManager:
         Returns:
             Item dictionary or None if not found
         """
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
+        cursor = self.__get_cursor()
+        cursor.execute(f"SELECT {','.join(FeedItem._fields)} FROM items WHERE id = ?", (item_id,))
 
-            cursor.execute(f"SELECT {','.join(FeedItem._fields)} FROM items WHERE id = ?", (item_id,))
+        row = cursor.fetchone()
+        return FeedItem._make(row) if row else None
 
-            row = cursor.fetchone()
-            return FeedItem._make(row) if row else None
 
-        finally:
-            conn.close()
-
-    def search_extensions_fts(self, query: str) -> List[FeedItem]:
+    def search_extensions_fts(self, query: str) -> list[tuple[FeedItem, float]]:
         """
         Search extensions in the FTS5 index.
 
@@ -239,19 +221,14 @@ class DbManager:
         Returns:
             List of matching extension items
         """
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
+        cursor = self.__get_cursor()
 
-            # Search title and description fields
-            cursor.execute(f"""
-                SELECT {','.join(f"i.{x}" for x in FeedItem._fields)}, f.rank FROM items i
-                INNER JOIN items_fts5 f ON i.id = f.rowid
-                WHERE items_fts5 MATCH ?
-                ORDER BY f.rank DESC
-            """, (query,))
+        # Search title and description fields
+        cursor.execute(f"""
+            SELECT {','.join(f"i.{x} AS x" for x in FeedItem._fields)}, f.rank FROM items i
+            INNER JOIN items_fts5 f ON i.id = f.rowid
+            WHERE items_fts5 MATCH ?
+            ORDER BY f.rank DESC
+        """, (query,))
 
-            return [FeedItem._make(row[:-1]) for row in cursor.fetchall()]
-
-        finally:
-            conn.close()
+        return [(FeedItem._make(row[:-1]),row[-1]) for row in cursor.fetchall()]
