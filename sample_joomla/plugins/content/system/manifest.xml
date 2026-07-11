@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" method="upgrade">
+    <name>system_cache</name>
+    <author>Joomla Project</author>
+    <version>2.5.9</version>
+    <description>Caching Plugin for Joomla</description>
+    <creationDate>Sun, 01 Jan 2000 00:00:00 GMT</creationDate>
+</extension>

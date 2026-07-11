@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" method="upgrade">
+    <name>system_debug</name>
+    <author>Joomla Project</author>
+    <version>2.5.4</version>
+    <description>System Debugging Plugin for Joomla</description>
+    <creationDate>Sun, 01 Jan 2000 00:00:00 GMT</creationDate>
+</extension>

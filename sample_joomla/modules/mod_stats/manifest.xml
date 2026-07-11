@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="module" method="upgrade">
+    <name>mod_stats</name>
+    <author>Joomla Project</author>
+    <version>3.9.25</version>
+    <description>Statistics Module for Joomla</description>
+    <creationDate>Sun, 01 Jan 2000 00:00:00 GMT</creationDate>
+</extension>
