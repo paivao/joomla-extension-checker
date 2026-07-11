@@ -68,26 +68,28 @@ class FeedItem(NamedTuple):
             data['install_data'] = str(data['install_data'])
         return cls(**{k: data.get(k) for k in cls._fields})
 
-    def format(self) -> str:
+    def format(self, indent: int = 4) -> str:
+        _indent = ' ' * indent
+        _0xa = "\n"
         _format = f"[{self.statusText}] [{self.risk_level or 'UNKNOWN'}] [{self.id}] {self.title}"
         if self.created or self.modified:
-            _format += f'\n  Created: {self.created}\tModified: {self.modified}'
+            _format += f'\n{_indent}Created: {self.created}\tModified: {self.modified}'
         if des := self.description:
-            _format += f'\n  {html.unescape(des).replace("\\r", "").replace("\\n", "\n  ")}'
+            _format += f'\n{_indent}{html.unescape(des).replace(_0xa, _0xa+_indent)}'
         if _rec := self.recommendation:
-            _format += f'\n  Recommendation: {_rec}'
+            _format += f'\n{_indent}Recommendation: {_rec}'
         if _jed := self.jed:
-            _format += f'\n  JED: {_jed}'
+            _format += f'\n{_indent}JED: {_jed}'
         if self.cve_id or self.cwe_id:
-            _format += f'\n  CVE: {self.cve_id}\tCWE: {self.cwe_id}'
+            _format += f'\n{_indent}CVE: {self.cve_id}\tCWE: {self.cwe_id}'
         if self.cvss30_base or self.cvss30_base_score:
-            _format += f'\n  CVS3: {self.cvss30_base} ({self.cvss30_base_score})'
+            _format += f'\n{_indent}CVS3: {self.cvss30_base} ({self.cvss30_base_score})'
         if self.start_version or self.vulnerable_version or self.patch_version:
-            _format += f'\n  Start version: {self.start_version}, Vulnerable: {self.vulnerable_version}, Patched: {self.patch_version}'
+            _format += f'\n{_indent}Start version: {self.start_version}, Vulnerable: {self.vulnerable_version}, Patched: {self.patch_version}'
         if _upd := self.update_notice:
-            _format += f'\n  Update notice: {_upd}'
+            _format += f'\n{_indent}Update notice: {_upd}'
         if _dat := self.install_data:
-            _format += f'\n  {_dat}'
+            _format += f'\n{_indent}{_dat}'
         return _format
 
 class Feed(NamedTuple):
