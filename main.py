@@ -112,21 +112,21 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
-    vuln_findings: dict[str,list[tuple[FeedItem, float]]] = {}
+    vuln_findings: dict[str,set[tuple[FeedItem, float]]] = {}
     with dbm:
         for ext in local_extensions.values():
-            vuln_findings[ext.name] = dbm.search_extensions_fts(ext.name)
+            vuln_findings[ext.name] = set(dbm.search_extensions_fts(ext.name))
             #if ext.author:
             #    vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
             if ext.description:
-                vuln_findings[ext.name] += dbm.search_extensions_fts(ext.name)
+                vuln_findings[ext.name] |= set(dbm.search_extensions_fts(ext.name))
             if len(vuln_findings[ext.name]) == 0:
                 vuln_findings.pop(ext.name)
 
     print("Showing findings:")
     for ext, findings in vuln_findings.items():
         print(f"Found this data for extension {ext}: {local_extensions[ext].xml_path}")
-        for item, score in findings:
+        for item, score in sorted(findings, key=lambda x: x[1], reverse=True):
             print(f"(score={score}) {item.format()}")
 
 if __name__ == '__main__':
