@@ -43,7 +43,7 @@ def main():
     )
     parser.add_argument(
         'joomla_path',
-        help='Base path to Joomla installation (e.g., C:/xampp/htdocs/myjoomla)'
+        help='Base path to Joomla installation (e.g., /var/www/html/joomla-site)'
     )
     parser.add_argument(
         '--db-path',
