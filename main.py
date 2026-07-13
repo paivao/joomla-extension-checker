@@ -29,6 +29,7 @@ from joomla_feed_checker.feed_fetcher import get_feed
 from joomla_feed_checker.local_scanner import scan_joomla_extensions
 from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.models import ExtensionMetadata, FeedItem
+from joomla_feed_checker.utils import write_csv_file
 
 
 def print_section_header(title: str):
@@ -56,11 +57,16 @@ def main():
         default='./database/vel_feed.db',
         help='Path to SQLite database file (default: ./database/vel_feed.db)'
     )
+    parser.add_argument(
+        '--output-dir',
+        help='Directory to Output CSV files'
+    )
 
     args = parser.parse_args()
 
     joomla_path = Path(args.joomla_path)
     db_path = args.db_path
+    output_dir = args.output_dir
 
     # Validate base path
     if not joomla_path.exists():
@@ -70,6 +76,17 @@ def main():
     # Create database directory
     db_dir = Path(db_path).parent
     db_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create output_dir if exists
+    if output_dir:
+        output_dir = Path(output_dir)
+        if not output_dir.exists():
+            print(f"Creating directory {output_dir}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+        elif not output_dir.is_dir():
+            print(f"Error: {output_dir} is not a directory, ignoring...")
+            output_dir = None
+
 
     # Step 1: Fetch feed if requested or always fetch for comparison
     print_section_header("STEP 1: Fetching Joomla Extensions Feed")
@@ -86,15 +103,19 @@ def main():
     print_section_header("STEP 2: Scanning Local Joomla Extensions")
     print(f"Base Path: {joomla_path}")
     print("\nSearching directories:")
-    print("  - administrator/components/*//*.xml")
-    print("  - administrator/modules/*//*.xml")
-    print("  - modules/*//*.xml")
-    print("  - plugins/*//*.xml")
+    print("  - administrator/components/*/*.xml")
+    print("  - administrator/modules/*/*.xml")
+    print("  - administrator/templates/*/*.xml")
+    print("  - modules/*/*.xml")
+    print("  - components/*/*.xml")
+    print("  - plugins/*/*/*.xml")
+    print("  - templates/*/*/*.xml")
 
     local_extensions: dict[str, ExtensionMetadata] = {}
     try:
         extensions = scan_joomla_extensions(joomla_path)
-
+        if output_dir:
+            write_csv_file(str(output_dir / "extensions.csv"), extensions)
         print(f"\n✓ Found {len(extensions)} extension(s)")
 
         for ext in extensions:
@@ -125,9 +146,12 @@ def main():
 
     print("Showing findings:")
     for ext, findings in vuln_findings.items():
-        print(f"Found this data for extension {ext}: {local_extensions[ext].xml_path}")
-        for item, score in sorted(findings, key=lambda x: x[1], reverse=True):
+        print(f"Found this data for extension {ext} ({local_extensions[ext].version}): {local_extensions[ext].xml_path}")
+        _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
+        for item, score in _sorted_findings:
             print(f"(score={score}) {item.format()}")
+        if output_dir:
+            write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
 
 if __name__ == '__main__':
     main()

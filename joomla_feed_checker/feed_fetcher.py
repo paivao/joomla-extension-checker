@@ -119,9 +119,9 @@ def get_feed(dbm: DbManager) -> Feed:
     if feed is None:
         print("Feed not found on database, fetching...")
         return fetch_and_store_feed(dbm)
-    if not feed.check_itself():
-        print("Database data is corrupted, fetching...")
-        return fetch_and_store_feed(dbm)
+    #if not feed.check_itself():
+    #    print("Database data is corrupted, fetching...")
+    #    return fetch_and_store_feed(dbm)
     checksum = fetch_checksum()
     if feed.checksum != checksum:
         print("Online feed is newer, fetching a new one...")
