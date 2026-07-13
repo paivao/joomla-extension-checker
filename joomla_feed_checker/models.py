@@ -172,6 +172,16 @@ class ExtensionMetadata(NamedTuple):
     creation_date: Optional[str]
     description: Optional[str]
 
+    def format(self, indent: int = 4) -> str:
+        _indent = " " * indent
+        _0xa = "\n"
+        _format = f'[TYPE:{self.type}] [VERSION:{self.version}] {self.name} at "{self.xml_path}"'
+        if self.author or self.creation_date:
+            _format += f'\n{_indent}Author: {self.author}\tCreation date: {self.creation_date}'
+        if des := self.description:
+            _format += f'\n{_indent}Description:{des.replace(_0xa, _0xa+_indent)}'
+        return _format
+
 # Optional convenience class for the entire feed response wrapper
 class ApiResponse(NamedTuple):
     """

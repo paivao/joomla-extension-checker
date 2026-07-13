@@ -93,7 +93,7 @@ class JoomlaExtensionScanner:
 
             # Build result dictionary
             return ExtensionMetadata(
-                xml_path=str(xml_path),
+                xml_path=str(xml_path.parent),
                 type=root.attrib.get('type'),
                 name=getattr(root.find('name'), 'text', ''),
                 author=getattr(root.find('author'), 'text', None),

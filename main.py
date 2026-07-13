@@ -99,12 +99,8 @@ def main():
 
         for ext in extensions:
             local_extensions[ext.name] = ext
-            print(f"  [{ext.type:8}] {ext.name} v{ext.version or 'N/A'} "
-                    f"by {ext.author or 'Unknown'}")
+            print(ext.format())
 
-            if desc := ext.description:
-                desc = desc[:100] + ("..." if len(desc) > 100 else "")
-                print(f"    Description: {desc}")
         if len(extensions) == 0:
             print("\n⚠ No extensions found in the specified directories")
             print("Make sure you are pointing to a valid Joomla installation.\n")
