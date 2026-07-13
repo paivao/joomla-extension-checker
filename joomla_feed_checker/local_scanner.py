@@ -10,6 +10,7 @@ from typing import Optional
 from joomla_feed_checker.models import ExtensionMetadata
 from .utils import find_files_recursively
 
+JOOMLA_CORE_AUTHOR = "Joomla! Project"
 
 class JoomlaExtensionScanner:
     """
@@ -22,7 +23,7 @@ class JoomlaExtensionScanner:
     - <base_path>/plugins/*/</**.xml (recursive search)
     """
 
-    def __init__(self, base_path: Path):
+    def __init__(self, base_path: Path, joomla_core_author: str = JOOMLA_CORE_AUTHOR):
         """
         Initialize scanner with base path.
 
@@ -30,12 +31,16 @@ class JoomlaExtensionScanner:
             base_path: Root directory of Joomla installation
         """
         self.base_path = base_path.resolve()
+        self.filter_author = joomla_core_author
         if not self.base_path.exists():
             raise ValueError(f"Base path does not exist: {base_path}")
 
-    def scan_for_extensions(self) -> list[ExtensionMetadata]:
+    def scan_for_extensions(self, filter_core: bool = True) -> list[ExtensionMetadata]:
         """
         Scan for all extension XML files in Joomla directories.
+
+        Args:
+            filter_core: True to filter out Joomla core extensions
 
         Returns:
             List of dictionaries containing extension metadata
@@ -63,7 +68,7 @@ class JoomlaExtensionScanner:
                 for xml_file in xml_files:
                     try:
                         extension_data = self.parse_extension_file(xml_file)
-                        if extension_data:
+                        if extension_data and not (filter_core and extension_data.author == self.filter_author):
                             extensions.append(extension_data)
                     except ET.ParseError as e:
                         print(f"Warning: Could not parse XML file {xml_file}: {e}")
@@ -92,6 +97,9 @@ class JoomlaExtensionScanner:
                 return None
 
             # Build result dictionary
+            _description: Optional[str] = getattr(root.find('description'), 'text', None)
+            if _description:
+                _description = _description.replace("\r","").replace("\n","\\n")
             return ExtensionMetadata(
                 xml_path=str(xml_path.parent),
                 type=root.attrib.get('type'),
@@ -99,14 +107,14 @@ class JoomlaExtensionScanner:
                 author=getattr(root.find('author'), 'text', None),
                 version=getattr(root.find('version'), 'text', None),
                 creation_date=getattr(root.find('creationDate'), 'text', None),
-                description=getattr(root.find('description'), 'text', None)
+                description=_description
             )
 
         except ET.ParseError as e:
             print(f"Warning: Could not parse XML file {xml_path}: {e}")
             return None
 
-def scan_joomla_extensions(base_path: Path) -> list[ExtensionMetadata]:
+def scan_joomla_extensions(base_path: Path, filter_core: bool = True) -> list[ExtensionMetadata]:
     """
     Convenience function to scan Joomla extensions.
 
@@ -117,4 +125,4 @@ def scan_joomla_extensions(base_path: Path) -> list[ExtensionMetadata]:
         List of extension summaries
     """
     scanner = JoomlaExtensionScanner(base_path)
-    return scanner.scan_for_extensions()
+    return scanner.scan_for_extensions(filter_core)

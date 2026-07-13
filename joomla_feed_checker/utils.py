@@ -36,3 +36,9 @@ def write_csv_file[T: NamedTuple](csv_path: str, data: Iterable[T]):
         writer.writerow(first)
         for row in _iter:
             writer.writerow(row)
+
+def print_section_header(title: str):
+    """Print a formatted section header."""
+    print(f"\n{'='*80}")
+    print(f"  {title}")
+    print('='*80)

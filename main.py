@@ -29,14 +29,7 @@ from joomla_feed_checker.feed_fetcher import get_feed
 from joomla_feed_checker.local_scanner import scan_joomla_extensions
 from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.models import ExtensionMetadata, FeedItem
-from joomla_feed_checker.utils import write_csv_file
-
-
-def print_section_header(title: str):
-    """Print a formatted section header."""
-    print(f"\n{'='*80}")
-    print(f" {title}")
-    print('='*80)
+from joomla_feed_checker.utils import print_section_header, write_csv_file
 
 
 def print_json(data: dict, indent: int = 2):
@@ -61,12 +54,18 @@ def main():
         '--output-dir',
         help='Directory to Output CSV files'
     )
+    parser.add_argument(
+        '--include-core',
+        action='store_true',
+        help='Include core Joomla extensions'
+    )
 
     args = parser.parse_args()
 
     joomla_path = Path(args.joomla_path)
     db_path = args.db_path
     output_dir = args.output_dir
+    filter_core = not args.include_core
 
     # Validate base path
     if not joomla_path.exists():
@@ -113,7 +112,7 @@ def main():
 
     local_extensions: dict[str, ExtensionMetadata] = {}
     try:
-        extensions = scan_joomla_extensions(joomla_path)
+        extensions = scan_joomla_extensions(joomla_path, filter_core)
         if output_dir:
             write_csv_file(str(output_dir / "extensions.csv"), extensions)
         print(f"\n✓ Found {len(extensions)} extension(s)")
@@ -133,6 +132,7 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
+    print_section_header("STEP 3: Searching for vunerable entries")
     vuln_findings: dict[str,set[tuple[FeedItem, float]]] = {}
     with dbm:
         for ext in local_extensions.values():
@@ -144,7 +144,6 @@ def main():
             if len(vuln_findings[ext.name]) == 0:
                 vuln_findings.pop(ext.name)
 
-    print("Showing findings:")
     for ext, findings in vuln_findings.items():
         print(f"Found this data for extension {ext} ({local_extensions[ext].version}): {local_extensions[ext].xml_path}")
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
@@ -152,6 +151,9 @@ def main():
             print(f"(score={score}) {item.format()}")
         if output_dir:
             write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
+
+    print_section_header("FINISHED: Remember to visit links and check")
+    print("**Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet")
 
 if __name__ == '__main__':
     main()
