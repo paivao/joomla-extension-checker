@@ -26,7 +26,7 @@ class JoomlaExtensionScanner:
 
     __kv_rex = re.compile(r'^([A-Z0-9_.-]+)="((?:[^"]|\\")+)"$')
 
-    def __init__(self, base_path: Path, joomla_core_author: str = JOOMLA_CORE_AUTHOR, languages=['en-GB']):
+    def __init__(self, base_path: Path, filter_core: bool = True, joomla_core_author: str = JOOMLA_CORE_AUTHOR, languages=['en-GB']):
         """
         Initialize scanner with base path.
 
@@ -36,10 +36,30 @@ class JoomlaExtensionScanner:
         self.base_path = base_path.resolve()
         self.filter_author = joomla_core_author
         self.languages = languages
+        self.filter_core = filter_core
+        self.included_by_package = []
         if not self.base_path.exists():
             raise ValueError(f"Base path does not exist: {base_path}")
 
-    def scan_for_extensions(self, filter_core: bool = True) -> list[ExtensionMetadata]:
+    @staticmethod
+    def __list_packages(extension: ET.Element) -> list[str]:
+        for tag_candidate in extension.findall("files"):
+            if tag.att
+
+    def scan_por_packages(self) -> tuple[list[ExtensionMetadata], list[str]]:
+        package_path = self.base_path / "administrator/manifests/packages"
+        self.included_by_package = []
+        packages = []
+        for xml_file in package_path.glob("*.xml"):
+            extension = self.__parse_extension_file(xml_file)
+            if extension is None:
+                continue
+            if extension.type != "package":
+                continue
+            packages.append(extension)
+            self.included_by_package += self.__list_packages(extension)
+
+    def scan_for_extensions(self) -> list[ExtensionMetadata]:
         """
         Scan for all extension XML files in Joomla directories.
 
@@ -70,9 +90,12 @@ class JoomlaExtensionScanner:
             try:
                 xml_files = find_files_recursively(root_dir)
                 for xml_file in xml_files:
+                    if str(xml_file.parent) in self.included_by_package:
+                        #print(f"Filtered {xml_file}")
+                        continue
                     try:
                         extension_data = self.__parse_extension_file(xml_file)
-                        if extension_data and not (filter_core and extension_data.author == self.filter_author):
+                        if extension_data and not (self.filter_core and extension_data.author == self.filter_author):
                             extensions.append(extension_data)
                     except ET.ParseError as e:
                         print(f"Warning: Could not parse XML file {xml_file}: {e}")
