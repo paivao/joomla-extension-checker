@@ -175,7 +175,7 @@ class ExtensionMetadata(NamedTuple):
     def format(self, indent: int = 4) -> str:
         _indent = " " * indent
         _0xa = "\n"
-        _format = f'[TYPE:{self.type}] [VERSION:{self.version}] {self.name} at "{self.xml_path}"'
+        _format = f'[TYPE:{self.type}] [VERSION:{self.version}] {self.name} @ "{self.xml_path}"'
         if self.author or self.creation_date:
             _format += f'\n{_indent}Author: {self.author}\tCreation date: {self.creation_date}'
         if des := self.description:
