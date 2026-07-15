@@ -6,6 +6,7 @@ Handles database operations including comparison of feed items with local extens
 import sqlite3
 from typing import Optional
 from .models import Feed, FeedItem
+import re
 
 class DbManager:
     """
@@ -15,6 +16,8 @@ class DbManager:
     - Extension comparison
     - Full-text search queries
     """
+
+    __filter_rex = re.compile(r"[^A-Za-z0-9_ ]")
 
     def __init__(self, db_path: str):
         """
@@ -224,13 +227,13 @@ class DbManager:
             List of matching extension items
         """
         cursor = self.__get_cursor()
-
+        query = self.__filter_rex.sub('', query)
         # Search title and description fields
         cursor.execute(f"""
             SELECT {','.join(f"i.{x} AS x" for x in FeedItem._fields)}, f.rank FROM items i
             INNER JOIN items_fts5 f ON i.id = f.rowid
             WHERE items_fts5 MATCH ?
             ORDER BY f.rank DESC
-        """, (f'"{query}"',))
+        """, (query,))
 
         return [(FeedItem._make(row[:-1]),row[-1]) for row in cursor.fetchall()]

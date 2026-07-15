@@ -5,11 +5,11 @@ Scans Joomla installation directories to find XML extension files.
 
 from xml.etree import ElementTree as ET
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 import re
+import os.path
 
 from joomla_feed_checker.models import ExtensionMetadata
-from .utils import find_files_recursively
 
 JOOMLA_CORE_AUTHOR = "Joomla! Project"
 
@@ -37,18 +37,30 @@ class JoomlaExtensionScanner:
         self.filter_author = joomla_core_author
         self.languages = languages
         self.filter_core = filter_core
-        self.included_by_package = []
+        self.package_mappings: dict[str,str] = {}
         if not self.base_path.exists():
             raise ValueError(f"Base path does not exist: {base_path}")
 
     @staticmethod
     def __list_packages(extension: ET.Element) -> list[str]:
-        for tag_candidate in extension.findall("files"):
-            if tag.att
+        packages = []
+        for tag_parent in extension.findall("files"):
+            for file_tag in tag_parent.findall("file"):
+                packages.append(os.path.join(file_tag.attrib['type']+'s', file_tag.attrib.get('group', ''), file_tag.attrib['id']))
+        return packages
 
-    def scan_por_packages(self) -> tuple[list[ExtensionMetadata], list[str]]:
+    def get_joomla_version(self) -> str:
+        manifest = self.base_path / "administrator/manifests/files/joomla.xml"
+        tree = ET.parse(manifest)
+        root = tree.getroot()
+        version = root.find('version')
+        if version is None:
+            raise Exception("Joomla manifest lack version")
+        return version.text or ''
+
+    def scan_por_packages(self) -> list[ExtensionMetadata]:
         package_path = self.base_path / "administrator/manifests/packages"
-        self.included_by_package = []
+        self.package_mappings = {}
         packages = []
         for xml_file in package_path.glob("*.xml"):
             extension = self.__parse_extension_file(xml_file)
@@ -57,7 +69,10 @@ class JoomlaExtensionScanner:
             if extension.type != "package":
                 continue
             packages.append(extension)
-            self.included_by_package += self.__list_packages(extension)
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            self.package_mappings.update({p: extension.name for p in self.__list_packages(root)})
+        return packages
 
     def scan_for_extensions(self) -> list[ExtensionMetadata]:
         """
@@ -73,32 +88,31 @@ class JoomlaExtensionScanner:
 
         # Define search paths
         search_paths = [
-            (self.base_path / 'administrator' / 'components'),
-            (self.base_path / 'administrator' / 'modules'),
-            (self.base_path / 'administrator' / 'templates'),
-            (self.base_path / 'modules'),
-            (self.base_path / 'plugins'),
-            (self.base_path / 'components'),
-            (self.base_path / 'templates'),
+            (self.base_path / 'administrator' / 'components', False),
+            (self.base_path / 'administrator' / 'modules', False),
+            (self.base_path / 'administrator' / 'templates', False),
+            (self.base_path / 'modules', False),
+            (self.base_path / 'plugins', True),
+            (self.base_path / 'components', False),
+            (self.base_path / 'templates', False),
         ]
 
-        for root_dir in search_paths:
+        for root_dir, two_levels in search_paths:
             if not root_dir.exists():
                 continue
 
             # Find all XML files
             try:
-                xml_files = find_files_recursively(root_dir)
+                xml_files = self.__find_files(root_dir, two_levels)
                 for xml_file in xml_files:
-                    if str(xml_file.parent) in self.included_by_package:
-                        #print(f"Filtered {xml_file}")
-                        continue
                     try:
                         extension_data = self.__parse_extension_file(xml_file)
-                        if extension_data and not (self.filter_core and extension_data.author == self.filter_author):
+                        if extension_data:
                             extensions.append(extension_data)
                     except ET.ParseError as e:
                         print(f"Warning: Could not parse XML file {xml_file}: {e}")
+                    except Exception as e:
+                        print(f"Unknown error at {xml_file}: {e}")
 
             except Exception as e:
                 print(f"Error scanning {root_dir}: {e}")
@@ -116,15 +130,21 @@ class JoomlaExtensionScanner:
             Dictionary with extension metadata or None if not an extension
         """
         try:
-            tree = ET.parse(str(xml_path))
+            tree = ET.parse(xml_path)
             root = tree.getroot()
+
+            relative_path = xml_path.relative_to(self.base_path).parent
+            relative_to_admin = relative_path.relative_to("administrator") if relative_path.is_relative_to("administrator") else ''
 
             # Only process files where root element is 'extension'
             if root.tag != 'extension':
                 return None
 
             author = root.find('author')
-            author = author.text if author else None
+            _author = author.text if author is not None else None
+            if self.filter_core and _author == self.filter_author:
+                # print("Filtered because it is from Joomla core")
+                return None
 
             language_kv = {}
             for languages_tag, lang_mid_path in ((root.find("languages"),'language'), (root.find('administration/languages'),'administrator/language')):
@@ -140,8 +160,12 @@ class JoomlaExtensionScanner:
                     language_kv |= self.__parse_language_file(self.base_path / lang_mid_path / lang / Path(lang_end_path).name)
 
             # Build result dictionary
-            _description = self.__extract_from_language(root.find('description'), language_kv)
-            _description = _description.replace("\r","").replace("\n","\\n") if _description else None
+            description = self.__extract_from_language(root.find('description'), language_kv)
+            _description = description.replace("\r","").replace("\n","\\n") if description is not None else None
+            name = root.find('name')
+            _name = (name.text or '') if name is not None else ''
+            #print(xml_path, relative_path, relative_to_admin)
+            _pack = self.package_mappings.get(str(relative_path)) or self.package_mappings.get(str(relative_to_admin))
             return ExtensionMetadata(
                 xml_path=str(xml_path.parent),
                 type=root.attrib.get('type') or '',
@@ -149,12 +173,19 @@ class JoomlaExtensionScanner:
                 author=self.__extract_from_language(root.find('author'), language_kv),
                 version=self.__extract_from_language(root.find('version'), language_kv),
                 creation_date=self.__extract_from_language(root.find('creationDate'), language_kv),
-                description=_description
+                description=_description,
+                package_name=_pack
             )
 
         except ET.ParseError as e:
             print(f"Warning: Could not parse XML file {xml_path}: {e}")
             return None
+
+    @staticmethod
+    def __find_files(path: Path, two_levels: bool) -> Iterator[Path]:
+        if two_levels:
+            return path.glob("*/*/*.xml")
+        return path.glob("*/*.xml")
 
     @staticmethod
     def __extract_from_language(element: Optional[ET.Element], lang_kv: dict[str, str]) -> Optional[str]:
@@ -187,5 +218,5 @@ def scan_joomla_extensions(base_path: Path, filter_core: bool = True) -> list[Ex
     Returns:
         List of extension summaries
     """
-    scanner = JoomlaExtensionScanner(base_path)
-    return scanner.scan_for_extensions(filter_core)
+    scanner = JoomlaExtensionScanner(base_path, filter_core=filter_core)
+    return scanner.scan_por_packages() + scanner.scan_for_extensions()

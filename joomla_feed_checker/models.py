@@ -163,12 +163,6 @@ class Feed(NamedTuple):
         return True
 
 
-class Package(NamedTuple):
-    type: str
-    id: str
-    group: Optional[str]
-
-
 class ExtensionMetadata(NamedTuple):
     xml_path: str
     type: str
@@ -177,16 +171,17 @@ class ExtensionMetadata(NamedTuple):
     version: Optional[str]
     creation_date: Optional[str]
     description: Optional[str]
-    package: Optional[list[Package]] = None
+    package_name: Optional[str]
 
     def format(self, indent: int = 4) -> str:
         _indent = " " * indent
         _0xa = "\n"
-        _format = f'[TYPE:{self.type}] [VERSION:{self.version}] {self.name} @ "{self.xml_path}"'
+        _package = f' [PACKAGE:{self.package_name}]' if self.package_name else ''
+        _format = f'[TYPE:{self.type}] [VERSION:{self.version}]{_package} {self.name} @ "{self.xml_path}"'
         if self.author or self.creation_date:
             _format += f'\n{_indent}Author: {self.author}\tCreation date: {self.creation_date}'
         if des := self.description:
-            _format += f'\n{_indent}Description:{html.unescape(des).replace(_0xa, _0xa+_indent)}'
+            _format += f'\n{_indent}Description: {html.unescape(des).replace(_0xa, _0xa+_indent)}'
         return _format
 
 # Optional convenience class for the entire feed response wrapper

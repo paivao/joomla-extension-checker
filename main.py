@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 from joomla_feed_checker.feed_fetcher import get_feed
-from joomla_feed_checker.local_scanner import scan_joomla_extensions
+from joomla_feed_checker.local_scanner import JoomlaExtensionScanner, scan_joomla_extensions
 from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.models import ExtensionMetadata, FeedItem
 from joomla_feed_checker.utils import print_section_header, write_csv_file
@@ -101,25 +101,19 @@ def main():
     # Step 2: Scan local Joomla extensions
     print_section_header("STEP 2: Scanning Local Joomla Extensions")
     print(f"Base Path: {joomla_path}")
-    print("\nSearching directories:")
-    print("  - administrator/components/*/*.xml")
-    print("  - administrator/modules/*/*.xml")
-    print("  - administrator/templates/*/*.xml")
-    print("  - modules/*/*.xml")
-    print("  - components/*/*.xml")
-    print("  - plugins/*/*/*.xml")
-    print("  - templates/*/*/*.xml")
 
     local_extensions: dict[str, ExtensionMetadata] = {}
     try:
-        extensions = scan_joomla_extensions(joomla_path, filter_core)
+        scanner = JoomlaExtensionScanner(joomla_path, filter_core=filter_core)
+        print(f"\n[+] Joomla! version = {scanner.get_joomla_version()}")
+        extensions = scanner.scan_por_packages() + scanner.scan_for_extensions()
         if output_dir:
             write_csv_file(str(output_dir / "extensions.csv"), extensions)
-        print(f"\n✓ Found {len(extensions)} extension(s)")
+        print(f"\n[+] Found {len(extensions)} packages and extensions:\n")
 
         for ext in extensions:
             local_extensions[ext.name] = ext
-            print(ext.format())
+            print(ext.format(),end='\n\n')
 
         if len(extensions) == 0:
             print("\n⚠ No extensions found in the specified directories")
@@ -127,7 +121,7 @@ def main():
             sys.exit(1)
 
     except Exception as e:
-        print(f"\n✗ Error scanning extensions: {e}")
+        print(f"\n[!] Error scanning extensions: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
@@ -145,15 +139,15 @@ def main():
                 vuln_findings.pop(ext.name)
 
     for ext, findings in vuln_findings.items():
-        print(f"Found this data for extension {ext} ({local_extensions[ext].version}): {local_extensions[ext].xml_path}")
+        print(f"\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ \"{local_extensions[ext].xml_path}\"\n")
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
         for item, score in _sorted_findings:
-            print(f"(score={score}) {item.format()}")
+            print(f"(score={score}) {item.format()}\n")
         if output_dir:
             write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
 
     print_section_header("FINISHED: Remember to visit links and check")
-    print("**Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet")
+    print("[*] Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet")
 
 if __name__ == '__main__':
     main()
