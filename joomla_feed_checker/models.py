@@ -163,14 +163,21 @@ class Feed(NamedTuple):
         return True
 
 
+class Package(NamedTuple):
+    type: str
+    id: str
+    group: Optional[str]
+
+
 class ExtensionMetadata(NamedTuple):
     xml_path: str
-    type: Optional[str]
+    type: str
     name: str
     author: Optional[str]
     version: Optional[str]
     creation_date: Optional[str]
     description: Optional[str]
+    package: Optional[list[Package]] = None
 
     def format(self, indent: int = 4) -> str:
         _indent = " " * indent

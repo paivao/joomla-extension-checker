@@ -123,6 +123,9 @@ class JoomlaExtensionScanner:
             if root.tag != 'extension':
                 return None
 
+            author = root.find('author')
+            author = author.text if author else None
+
             language_kv = {}
             for languages_tag, lang_mid_path in ((root.find("languages"),'language'), (root.find('administration/languages'),'administrator/language')):
                 if languages_tag is None:
@@ -141,7 +144,7 @@ class JoomlaExtensionScanner:
             _description = _description.replace("\r","").replace("\n","\\n") if _description else None
             return ExtensionMetadata(
                 xml_path=str(xml_path.parent),
-                type=root.attrib.get('type'),
+                type=root.attrib.get('type') or '',
                 name=self.__extract_from_language(root.find('name'), language_kv) or '',
                 author=self.__extract_from_language(root.find('author'), language_kv),
                 version=self.__extract_from_language(root.find('version'), language_kv),
