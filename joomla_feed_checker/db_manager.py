@@ -131,6 +131,73 @@ class DbManager:
                 VALUES(NEW.id, NEW.title, NEW.description);
             END
         """)
+
+        # NVD CVE
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cve_status (
+                keyword TEXT PRIMARY KEY,
+                last_run_at TEXT
+            )
+        ''')
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cve_records (
+            cve_id TEXT PRIMARY KEY,
+            source_identifier TEXT,
+            vuln_status TEXT,
+            published DATETIME NOT NULL,
+            last_modified DATETIME NOT NULL,
+            evaluator_comment TEXT,
+            evaluator_solution TEXT,
+            evaluator_impact TEXT,
+            cisa_exploit_add DATE,
+            cisa_action_due DATE,
+            cisa_required_action TEXT,
+            cisa_vulnerability_name TEXT,
+            cve_tags TEXT,
+            description TEXT NOT NULL,
+            references TEXT NOT NULL,
+            cvss_metrics_json TEXT,
+            affected_json TEXT,
+            weaknesses TEXT,
+            configurations TEXT,
+            vendor_comments TEXT
+        )
+        ''')
+
+        # Create FTS5 virtual table for full-text search on English descriptions
+        cursor.execute('''
+        CREATE VIRTUAL TABLE IF NOT EXISTS cve_fts_search USING fts5(
+            description,
+            content='cve_records',
+            content_rowid='cve_id'
+        )
+        ''')
+
+        # Create trigger to automatically populate FTS5 table when a new record is added/updated
+        cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ai AFTER INSERT ON cve_records BEGIN
+            INSERT INTO cve_fts_search(rowid, description)
+            VALUES(NEW.cve_id, NEW.description);
+        END
+        ''')
+
+        cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ad AFTER DELETE ON cve_records BEGIN
+            INSERT INTO cve_fts_search(cve_fts_search, rowid, description)
+            VALUES('delete', OLD.cve_id, OLD.description);
+        END
+        ''')
+
+        cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ud AFTER UPDATE ON cve_records BEGIN
+            INSERT INTO cve_fts_search(cve_fts_search, rowid, description)
+            VALUES('delete', OLD.cve_id, OLD.description);
+            INSERT INTO cve_fts_search(rowid, description)
+            VALUES(NEW.cve_id, NEW.description);
+        END
+        ''')
+
         cursor.connection.commit()
 
     def save_feed_to_db(self, feed_data: Feed) -> int:
