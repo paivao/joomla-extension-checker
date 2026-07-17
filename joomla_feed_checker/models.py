@@ -3,6 +3,9 @@ Data classes for Joomla Extensions feed and items.
 Based on the Joomla Extensions API response format.
 """
 
+from datetime import datetime
+import json
+import sqlite3
 from typing import Any, Optional, Union, NamedTuple
 import html
 
@@ -184,8 +187,53 @@ class ExtensionMetadata(NamedTuple):
             _format += f'\n{_indent}Description: {html.unescape(des).replace(_0xa, _0xa+_indent)}'
         return _format
 
-# Optional convenience class for the entire feed response wrapper
-class ApiResponse(NamedTuple):
+class CVEEntry(NamedTuple):
+    id: str
+    sourceIdentifier: str
+    published: datetime
+    lastModified: datetime
+    vulnStatus: str
+    description: str # Differ from descriptions
+    references: list[Any]
+    evaluatorComment: Optional[str] = None
+    evaluatorImpact: Optional[str] = None
+    evaluatorSolution: Optional[str] = None
+    cisaExploitAdd: Optional[str] = None
+    cisaActionDue: Optional[str] = None
+    cisaRequiredAction: Optional[str] = None
+    cisaVulnerabilityName: Optional[str] = None
+    cveTags: list[Any] | None = None
+    metrics: dict[str, Any] | None = None
+    weaknesses: list[Any] | None = None
+    affected: list[Any] | None = None
+    configurations: list[Any] | None = None
+    vendorComments: list[Any] | None = None
+    ssvc: list[Any] | None = None
+
+    @classmethod
+    def get_fields(cls):
+        return cls._fields[:6] + ("_references",) + cls._fields[7:]
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]):
+        descriptions: list[dict[str,str]] = data.pop('descriptions') or []
+        if len(descriptions) == 0:
+            raise ValueError("Empty descriptions")
+        data.update({
+            'description': next(filter(lambda x: x['lang']=='en', descriptions),descriptions[0])['value'],
+            'published': datetime.fromisoformat(data.pop('published').replace('Z', "+00:00")),
+            'lastModified': datetime.fromisoformat(data.pop('lastModified').replace('Z', "+00:00")),
+        })
+        return cls(**data)
+
+    def to_db(self):
+        return tuple(str(i) for i in self[:6]) + (json.dumps(self.references),) + self[7:14] + tuple(json.dumps(i) for i in self[14:])
+
+    @classmethod
+    def from_db(cls, row: sqlite3.Row):
+        return cls(*(row[:2] + tuple(datetime.fromisoformat(i) for i in row[2:4]) + row[4:6] + (json.loads(row['_references']),) + row[7:14] + tuple(json.loads(i) for i in row[14:])))
+
+class NVDAPIResponse(NamedTuple):
     """
     Represents the complete API response structure.
 
@@ -193,5 +241,16 @@ class ApiResponse(NamedTuple):
         success: Boolean indicating request success
         data: The actual feed data (Feed object) or string hash for verification
     """
-    success: bool = False
-    data: Optional[Union['Feed', str]] = None  # Can be Feed or string
+    resultsPerPage: int
+    startIndex: int
+    totalResults: int
+    format: str
+    version: str
+    timestamp: datetime
+    vulnerabilities: list[CVEEntry]
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]):
+        timestamp = datetime.fromisoformat(data.pop('timestamp').replace('Z', "+00:00"))
+        vulnerabilities = [CVEEntry.from_api(entry['cve']) for entry in data.pop('vulnerabilities')]
+        return cls(timestamp=timestamp, vulnerabilities=vulnerabilities, **data)

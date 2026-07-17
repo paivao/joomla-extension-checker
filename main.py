@@ -28,7 +28,8 @@ from pathlib import Path
 from joomla_feed_checker.feed_fetcher import get_feed
 from joomla_feed_checker.local_scanner import JoomlaExtensionScanner, scan_joomla_extensions
 from joomla_feed_checker.db_manager import DbManager
-from joomla_feed_checker.models import ExtensionMetadata, FeedItem
+from joomla_feed_checker.models import CVEEntry, ExtensionMetadata, FeedItem
+from joomla_feed_checker.nvd_fetcher import fetch_and_get_nvd_data
 from joomla_feed_checker.utils import print_section_header, write_csv_file
 
 
@@ -96,7 +97,9 @@ def main():
     with dbm:
         dbm.create_database()
         feed = get_feed(dbm)
+        cves = fetch_and_get_nvd_data(dbm)
     print(f"Feed version: {feed.api_version}")
+    print(f"CVEs found: {len(cves)}")
 
     # Step 2: Scan local Joomla extensions
     print_section_header("STEP 2: Scanning Local Joomla Extensions")
@@ -126,7 +129,7 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
-    print_section_header("STEP 3: Searching for vunerable entries")
+    print_section_header("STEP 3: Searching Joomla VEL for vunerable entries")
     vuln_findings: dict[str,set[tuple[FeedItem, float]]] = {}
     with dbm:
         for ext in local_extensions.values():
@@ -134,7 +137,7 @@ def main():
             #if ext.author:
             #    vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
             if ext.description:
-                vuln_findings[ext.name] |= set(dbm.search_extensions_fts(ext.name))
+                vuln_findings[ext.name] |= set(dbm.search_extensions_fts(ext.description))
             if len(vuln_findings[ext.name]) == 0:
                 vuln_findings.pop(ext.name)
 
@@ -143,6 +146,24 @@ def main():
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
         for item, score in _sorted_findings:
             print(f"(score={score}) {item.format()}\n")
+        if output_dir:
+            write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
+
+    print_section_header("STEP 4: Searching NVD CVE for vunerable entries")
+    cves_findings: dict[str,set[tuple[CVEEntry, float]]] = {}
+    with dbm:
+        for ext in local_extensions.values():
+            cves_findings[ext.name] = set(dbm.search_cves_fts(ext.name))
+            if ext.description:
+                cves_findings[ext.name] |= set(dbm.search_cves_fts(ext.description))
+            if len(cves_findings[ext.name]) == 0:
+                cves_findings.pop(ext.name)
+
+    for ext, findings in cves_findings.items():
+        print(f"\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ \"{local_extensions[ext].xml_path}\"\n")
+        _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
+        for item, score in _sorted_findings:
+            print(f"(score={score}) {item}\n")
         if output_dir:
             write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
 
