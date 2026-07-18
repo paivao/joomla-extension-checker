@@ -132,11 +132,31 @@ class DbManager:
             END
         """)
 
-        # NVD CVE
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cve_status (
-                keyword TEXT PRIMARY KEY,
-                last_run_at TEXT
+        # NVD fetch data tables
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cves (
+                id TEXT PRIMARY KEY,
+                sourceIdentifier TEXT NOT NULL,
+                published TEXT NOT NULL,
+                lastModified TEXT NOT NULL,
+                vulnStatus TEXT NOT NULL,
+                description TEXT NOT NULL,
+                _references TEXT NOT NULL,
+                cveTags TEXT,
+                metrics TEXT,
+                weaknesses TEXT,
+                affected TEXT,
+                configurations TEXT,
+                vendorComments TEXT,
+                ssvc TEXT,
+                evaluatorComment TEXT,
+                evaluatorImpact TEXT,
+                evaluatorSolution TEXT,
+                cisaExploitAdd TEXT,
+                cisaActionDue TEXT,
+                cisaRequiredAction TEXT,
+                cisaVulnerabilityName TEXT
             )
         ''')
 
