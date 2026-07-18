@@ -3,9 +3,11 @@ Database Manager module for Joomla Extension Checker.
 Handles database operations including comparison of feed items with local extensions.
 """
 
+from datetime import datetime, timedelta, timezone
+import json
 import sqlite3
 from typing import Optional
-from .models import Feed, FeedItem
+from .models import CVEEntry, Feed, FeedItem
 import re
 
 class DbManager:
@@ -158,65 +160,49 @@ class DbManager:
                 cisaRequiredAction TEXT,
                 cisaVulnerabilityName TEXT
             )
-        ''')
-
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cve_records (
-            cve_id TEXT PRIMARY KEY,
-            source_identifier TEXT,
-            vuln_status TEXT,
-            published DATETIME NOT NULL,
-            last_modified DATETIME NOT NULL,
-            evaluator_comment TEXT,
-            evaluator_solution TEXT,
-            evaluator_impact TEXT,
-            cisa_exploit_add DATE,
-            cisa_action_due DATE,
-            cisa_required_action TEXT,
-            cisa_vulnerability_name TEXT,
-            cve_tags TEXT,
-            description TEXT NOT NULL,
-            references TEXT NOT NULL,
-            cvss_metrics_json TEXT,
-            affected_json TEXT,
-            weaknesses TEXT,
-            configurations TEXT,
-            vendor_comments TEXT
+            """
         )
-        ''')
 
-        # Create FTS5 virtual table for full-text search on English descriptions
-        cursor.execute('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS cve_fts_search USING fts5(
-            description,
-            content='cve_records',
-            content_rowid='cve_id'
-        )
-        ''')
+        # Create FTS5 virtual table for full-text search on description
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS cves_fts5 USING fts5(
+                description,
+                content=cves,
+                content_rowid=rowid
+            )
+        """)
 
-        # Create trigger to automatically populate FTS5 table when a new record is added/updated
-        cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ai AFTER INSERT ON cve_records BEGIN
-            INSERT INTO cve_fts_search(rowid, description)
-            VALUES(NEW.cve_id, NEW.description);
-        END
-        ''')
+        # Add trigger to populate FTS5 table when item is inserted
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS cves_after_insert
+            AFTER INSERT ON cves
+            BEGIN
+                INSERT INTO cves_fts5(rowid, description)
+                VALUES(NEW.rowid, NEW.description);
+            END
+        """)
 
-        cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ad AFTER DELETE ON cve_records BEGIN
-            INSERT INTO cve_fts_search(cve_fts_search, rowid, description)
-            VALUES('delete', OLD.cve_id, OLD.description);
-        END
-        ''')
+        # Add trigger to delete from FTS5 when item is deleted
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS cves_after_delete
+            AFTER DELETE ON cves
+            BEGIN
+                INSERT INTO cves_fts5(cves_fts5, rowid, description)
+                VALUES('delete', OLD.rowid, OLD.description);
+            END
+        """)
 
-        cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS cve_fts_search_ud AFTER UPDATE ON cve_records BEGIN
-            INSERT INTO cve_fts_search(cve_fts_search, rowid, description)
-            VALUES('delete', OLD.cve_id, OLD.description);
-            INSERT INTO cve_fts_search(rowid, description)
-            VALUES(NEW.cve_id, NEW.description);
-        END
-        ''')
+        # Add trigger to update FTS5 when item is updated
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS cves_after_update
+            AFTER UPDATE ON cves
+            BEGIN
+                INSERT INTO cves_fts5(cves_fts5, rowid, description)
+                VALUES('delete', OLD.rowid, OLD.description);
+                INSERT INTO cves_fts5(rowid, description)
+                VALUES(NEW.rowid, NEW.description);
+            END
+        """)
 
         cursor.connection.commit()
 
@@ -252,6 +238,33 @@ class DbManager:
 
         cursor.connection.commit()
         return inserted_count
+
+    def save_cves_to_db(self, cve_data: list[CVEEntry]) -> int:
+        cursor = self.__get_cursor()
+        inserted_count = 0
+        insert_query = f"INSERT OR REPLACE INTO cves ({', '.join(CVEEntry.get_fields())}) VALUES ({', '.join(['?'] * len(CVEEntry.get_fields()))})"
+        for cve in cve_data:
+            try:
+                cursor.execute(insert_query, cve.to_db())
+                inserted_count += 1
+            except sqlite3.Error as e:
+                print(insert_query, cve.to_db)
+                print(f"Error inserting item {cve.id}: {e}")
+                print(f"\t{cve}")
+        cursor.connection.commit()
+        return inserted_count
+
+    def get_last_modified_cve(self) -> Optional[datetime]:
+        cursor = self.__get_cursor()
+        cursor.execute("SELECT lastModified FROM cves ORDER BY lastModified DESC LIMIT 1")
+        row = cursor.fetchone()
+        return datetime.fromisoformat(row[0]) if row else None
+
+    def get_cves(self) -> list[CVEEntry]:
+        cursor = self.__get_cursor()
+        query = f"SELECT {','.join(CVEEntry.get_fields())} FROM cves"
+        cursor.execute(query)
+        return [CVEEntry.from_db(row) for row in cursor.fetchall()]
 
     def get_feed(self) -> Optional[Feed]:
         """
@@ -317,10 +330,33 @@ class DbManager:
         query = self.__filter_rex.sub('', query)
         # Search title and description fields
         cursor.execute(f"""
-            SELECT {','.join(f"i.{x} AS x" for x in FeedItem._fields)}, f.rank FROM items i
+            SELECT {','.join(f"i.{x} AS '{x}'" for x in FeedItem._fields)}, f.rank FROM items i
             INNER JOIN items_fts5 f ON i.id = f.rowid
             WHERE items_fts5 MATCH ?
             ORDER BY f.rank DESC
         """, (query,))
 
         return [(FeedItem._make(row[:-1]),row[-1]) for row in cursor.fetchall()]
+
+    def search_cves_fts(self, query: str) -> list[tuple[CVEEntry, float]]:
+        """
+        Search extensions in the FTS5 index.
+
+        Args:
+            query: Search query string
+
+        Returns:
+            List of matching extension items
+        """
+        cursor = self.__get_cursor()
+        query = self.__filter_rex.sub('', query)
+        _fields = ','.join(f"'e.{x}' AS '{x}'" for x in CVEEntry.get_fields())
+        sql = f"""
+            SELECT {_fields}, f.rank FROM cves i
+            INNER JOIN cves_fts5 f ON i.id = f.rowid
+            WHERE cves_fts5 MATCH ?
+            ORDER BY f.rank DESC
+        """
+        cursor.execute(sql, (query,))
+        rows = cursor.fetchall()
+        return [(CVEEntry(*(row[:6] + tuple(map(json.loads, row[6:-1])))), row[-1]) for row in rows]
