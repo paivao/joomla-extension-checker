@@ -26,10 +26,10 @@ import sys
 from pathlib import Path
 
 from joomla_feed_checker.feed_fetcher import get_feed
-from joomla_feed_checker.local_scanner import JoomlaExtensionScanner, scan_joomla_extensions
+from joomla_feed_checker.local_scanner import JoomlaExtensionScanner
 from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.models import CVEEntry, ExtensionMetadata, FeedItem
-from joomla_feed_checker.nvd_fetcher import fetch_and_get_nvd_data
+from joomla_feed_checker.nvd_fetcher import load_cves
 from joomla_feed_checker.utils import print_section_header, write_csv_file
 
 
@@ -97,7 +97,7 @@ def main():
     with dbm:
         dbm.create_database()
         feed = get_feed(dbm)
-        cves = fetch_and_get_nvd_data(dbm)
+        cves = load_cves(dbm)
     print(f"Feed version: {feed.api_version}")
     print(f"CVEs found: {len(cves)}")
 
@@ -163,9 +163,9 @@ def main():
         print(f"\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ \"{local_extensions[ext].xml_path}\"\n")
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
         for item, score in _sorted_findings:
-            print(f"(score={score}) {item}\n")
+            print(f"(score={score}) [{item.id}] {item.description}\n")
         if output_dir:
-            write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
+            write_csv_file(str(output_dir / "cves.csv"), [_sf[0] for _sf in _sorted_findings])
 
     print_section_header("FINISHED: Remember to visit links and check")
     print("[*] Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet")

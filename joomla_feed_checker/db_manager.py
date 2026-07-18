@@ -35,7 +35,7 @@ class DbManager:
         if self.__conn is not None:
             return
         self.__conn = sqlite3.connect(self.__db_path)
-        self.__conn.row_factory = sqlite3.Row
+        #self.__conn.row_factory = sqlite3.Row
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.__conn is None:
@@ -281,7 +281,7 @@ class DbManager:
 
         if not row:
             return None
-        _feed = Feed(**row)
+        _feed = Feed(*row)
         return _feed._replace(items=self.get_all_feed_items())
 
     def get_all_feed_items(self) -> list[FeedItem]:
@@ -330,7 +330,7 @@ class DbManager:
         query = self.__filter_rex.sub('', query)
         # Search title and description fields
         cursor.execute(f"""
-            SELECT {','.join(f"i.{x} AS '{x}'" for x in FeedItem._fields)}, f.rank FROM items i
+            SELECT {','.join(f"i.{x} AS {x}" for x in FeedItem._fields)}, f.rank FROM items i
             INNER JOIN items_fts5 f ON i.id = f.rowid
             WHERE items_fts5 MATCH ?
             ORDER BY f.rank DESC
@@ -350,13 +350,13 @@ class DbManager:
         """
         cursor = self.__get_cursor()
         query = self.__filter_rex.sub('', query)
-        _fields = ','.join(f"'e.{x}' AS '{x}'" for x in CVEEntry.get_fields())
+        _fields = ','.join(f"e.{x} AS {x}" for x in CVEEntry.get_fields())
         sql = f"""
-            SELECT {_fields}, f.rank FROM cves i
-            INNER JOIN cves_fts5 f ON i.id = f.rowid
+            SELECT {_fields}, f.rank FROM cves e
+            INNER JOIN cves_fts5 f ON e.rowid = f.rowid
             WHERE cves_fts5 MATCH ?
             ORDER BY f.rank DESC
         """
         cursor.execute(sql, (query,))
         rows = cursor.fetchall()
-        return [(CVEEntry(*(row[:6] + tuple(map(json.loads, row[6:-1])))), row[-1]) for row in rows]
+        return [(CVEEntry.from_db(row[:-1]),row[-1]) for row in rows]

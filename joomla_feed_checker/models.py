@@ -210,6 +210,9 @@ class CVEEntry(NamedTuple):
     vendorComments: list[Any] | None = None
     ssvc: list[Any] | None = None
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
     @classmethod
     def get_fields(cls):
         return cls._fields[:6] + ("_references",) + cls._fields[7:]
@@ -231,7 +234,8 @@ class CVEEntry(NamedTuple):
 
     @classmethod
     def from_db(cls, row: sqlite3.Row):
-        return cls(*(row[:2] + tuple(datetime.fromisoformat(i) for i in row[2:4]) + row[4:6] + (json.loads(row['_references']),) + row[7:14] + tuple(json.loads(i) for i in row[14:])))
+        return cls(
+            *(row[:2] + tuple(datetime.fromisoformat(i) for i in row[2:4]) + row[4:6] + (json.loads(row[6]),) + row[7:14] + tuple(json.loads(i) for i in row[14:])))
 
 class NVDAPIResponse(NamedTuple):
     """

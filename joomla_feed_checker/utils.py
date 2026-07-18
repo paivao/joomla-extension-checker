@@ -1,6 +1,6 @@
 import json
 import hashlib
-from typing import Iterable, NamedTuple
+from typing import Any, Iterable, NamedTuple
 import csv
 
 def calculate_checksum(data: dict) -> str:
@@ -17,7 +17,7 @@ def calculate_checksum(data: dict) -> str:
     feed_content = json.dumps(data).replace("\n", "").replace(" ", "").replace("\t", "").replace("/", "\\/")
     return hashlib.sha256(feed_content.encode('utf-8')).hexdigest()
 
-def write_csv_file[T: NamedTuple](csv_path: str, data: Iterable[T]):
+def write_csv_file(csv_path: str, data: Iterable[Any]):
     with open(csv_path, "w") as file:
         writer = csv.writer(file)
         _iter = iter(data)
