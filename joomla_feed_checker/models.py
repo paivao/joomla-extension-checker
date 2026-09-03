@@ -7,7 +7,7 @@ import html
 import json
 import sqlite3
 from datetime import datetime
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 from joomla_feed_checker.utils import calculate_checksum
 
@@ -198,6 +198,36 @@ class ExtensionMetadata(NamedTuple):
         return _format
 
 
+class CPEMatch(NamedTuple):
+    vulnerable: bool
+    criteria: str
+    matchCriteriaId: str
+    versionStartExcluding: str|None = None
+    versionStartIncluding: str|None = None
+    versionEndExcluding: str|None = None
+    versionEndIncluding: str|None = None
+
+class CVEConfigNode(NamedTuple):
+    operator: Literal["AND","OR"]
+    cpeMatch: list[CPEMatch]
+    negate: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]):
+        match: list[dict[str, str]] = data.pop('cpeMatch') or [{}]
+        return cls(cpeMatch=[CPEMatch(**m) for m in match], **data)
+
+class CVEConfiguration(NamedTuple):
+    nodes: list[CVEConfigNode]
+    negate: bool = False
+    operator: Literal["AND","OR"] = "AND"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]):
+        nodes = data.pop("nodes", [{}])
+        return cls(nodes=[CVEConfigNode.from_dict(n) for n in nodes], **data)
+
+
 class CVEEntry(NamedTuple):
     id: str
     sourceIdentifier: str
@@ -213,11 +243,11 @@ class CVEEntry(NamedTuple):
     cisaActionDue: str|None = None
     cisaRequiredAction: str|None = None
     cisaVulnerabilityName: str|None = None
+    configurations: list[CVEConfiguration] | None = None
     cveTags: list[Any] | None = None
     metrics: dict[str, Any] | None = None
     weaknesses: list[Any] | None = None
     affected: list[Any] | None = None
-    configurations: list[Any] | None = None
     vendorComments: list[Any] | None = None
     ssvc: list[Any] | None = None
 
@@ -230,7 +260,8 @@ class CVEEntry(NamedTuple):
 
     @classmethod
     def from_api(cls, data: dict[str, Any]):
-        descriptions: list[dict[str, str]] = data.pop("descriptions") or []
+        descriptions: list[dict[str, str]] = data.pop("descriptions", [])
+        configurations: list[dict[str, Any]] = data.pop("configurations", [{}])
         if len(descriptions) == 0:
             raise ValueError("Empty descriptions")
         data.update(
@@ -246,14 +277,15 @@ class CVEEntry(NamedTuple):
                 ),
             }
         )
-        return cls(**data)
+        return cls(configurations=[CVEConfiguration.from_dict(c) for c in configurations], **data)
 
     def to_db(self):
         return (
             tuple(str(i) for i in self[:6])
             + (json.dumps(self.references),)
             + self[7:14]
-            + tuple(json.dumps(i) for i in self[14:])
+            + (json.dumps([c._asdict() for c in self.configurations] if self.configurations else []),)
+            + tuple(json.dumps(i) for i in self[15:])
         )
 
     @classmethod
@@ -265,8 +297,10 @@ class CVEEntry(NamedTuple):
                 + row[4:6]
                 + (json.loads(row[6]),)
                 + row[7:14]
-                + tuple(json.loads(i) for i in row[14:])
-            )
+                + (row[14],)
+                + tuple(json.loads(i) for i in row[15:])
+            ),
+            configurations=[CVEConfiguration.from_dict(c) for c in json.loads(row[14])]
         )
 
 

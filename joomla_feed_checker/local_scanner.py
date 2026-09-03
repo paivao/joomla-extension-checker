@@ -25,7 +25,7 @@ class JoomlaExtensionScanner:
     - <base_path>/plugins/*/</**.xml (recursive search)
     """
 
-    __kv_rex = re.compile(r'^([A-Z0-9_.-]+)="((?:[^"]|\\")+)"$')
+    __kv_rex = re.compile(r'^([A-Z0-9_.-]+)\s*=\s*"((?:[^"]|\\")+)"$')
 
     def __init__(
         self,
@@ -179,7 +179,7 @@ class JoomlaExtensionScanner:
                     lang_end_path = lang_tag.text
                     if lang_end_path is None:
                         continue
-                    lang_files.append(Path("lang") / Path(lang_end_path).name)
+                    lang_files.append(Path(lang) / Path(lang_end_path).name)
             lang_files = self.__get_language_files(lang_files)
 
             language_kv: dict[str, str] = {}
