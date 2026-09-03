@@ -1,9 +1,10 @@
-import json
-import hashlib
-from typing import Any, Iterable, NamedTuple
 import csv
+import hashlib
+import json
+from typing import Any, Iterable, NamedTuple
 
-def calculate_checksum(data: dict) -> str:
+
+def calculate_checksum(data: dict[str, Any]) -> str:
     """
     Calculate SHA256 checksum for the feed data.
 
@@ -14,8 +15,15 @@ def calculate_checksum(data: dict) -> str:
         Lowercase hex digest of SHA256 hash of serialized data
     """
     # Create a JSON representation without the wrapper structure for checksum
-    feed_content = json.dumps(data).replace("\n", "").replace(" ", "").replace("\t", "").replace("/", "\\/")
-    return hashlib.sha256(feed_content.encode('utf-8')).hexdigest()
+    feed_content = (
+        json.dumps(data)
+        .replace("\n", "")
+        .replace(" ", "")
+        .replace("\t", "")
+        .replace("/", "\\/")
+    )
+    return hashlib.sha256(feed_content.encode("utf-8")).hexdigest()
+
 
 def write_csv_file(csv_path: str, data: Iterable[Any]):
     with open(csv_path, "w") as file:
@@ -27,8 +35,9 @@ def write_csv_file(csv_path: str, data: Iterable[Any]):
         for row in _iter:
             writer.writerow(row)
 
+
 def print_section_header(title: str):
     """Print a formatted section header."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"  {title}")
-    print('='*80)
+    print("=" * 80)

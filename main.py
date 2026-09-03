@@ -24,41 +24,37 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
+from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.feed_fetcher import get_feed
 from joomla_feed_checker.local_scanner import JoomlaExtensionScanner
-from joomla_feed_checker.db_manager import DbManager
 from joomla_feed_checker.models import CVEEntry, ExtensionMetadata, FeedItem
 from joomla_feed_checker.nvd_fetcher import load_cves
 from joomla_feed_checker.utils import print_section_header, write_csv_file
 
 
-def print_json(data: dict, indent: int = 2):
+def print_json(data: dict[str, Any], indent: int = 2):
     """Pretty print JSON data."""
     print(json.dumps(data, indent=indent))
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Joomla Extension Checker - Compare local extensions with Joomla feed'
+        description="Joomla Extension Checker - Compare local extensions with Joomla feed"
     )
     parser.add_argument(
-        'joomla_path',
-        help='Base path to Joomla installation (e.g., /var/www/html/joomla-site)'
+        "joomla_path",
+        help="Base path to Joomla installation (e.g., /var/www/html/joomla-site)",
     )
     parser.add_argument(
-        '--db-path',
-        default='./database/vel_feed.db',
-        help='Path to SQLite database file (default: ./database/vel_feed.db)'
+        "--db-path",
+        default="./database/vel_feed.db",
+        help="Path to SQLite database file (default: ./database/vel_feed.db)",
     )
+    parser.add_argument("--output-dir", help="Directory to Output CSV files")
     parser.add_argument(
-        '--output-dir',
-        help='Directory to Output CSV files'
-    )
-    parser.add_argument(
-        '--include-core',
-        action='store_true',
-        help='Include core Joomla extensions'
+        "--include-core", action="store_true", help="Include core Joomla extensions"
     )
 
     args = parser.parse_args()
@@ -86,7 +82,6 @@ def main():
         elif not output_dir.is_dir():
             print(f"Error: {output_dir} is not a directory, ignoring...")
             output_dir = None
-
 
     # Step 1: Fetch feed if requested or always fetch for comparison
     print_section_header("STEP 1: Fetching Joomla Extensions Feed")
@@ -116,7 +111,7 @@ def main():
 
         for ext in extensions:
             local_extensions[ext.name] = ext
-            print(ext.format(),end='\n\n')
+            print(ext.format(), end="\n\n")
 
         if len(extensions) == 0:
             print("\n⚠ No extensions found in the specified directories")
@@ -126,31 +121,38 @@ def main():
     except Exception as e:
         print(f"\n[!] Error scanning extensions: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
     print_section_header("STEP 3: Searching Joomla VEL for vunerable entries")
-    vuln_findings: dict[str,set[tuple[FeedItem, float]]] = {}
+    vuln_findings: dict[str, set[tuple[FeedItem, float]]] = {}
     with dbm:
         for ext in local_extensions.values():
             vuln_findings[ext.name] = set(dbm.search_extensions_fts(ext.name))
-            #if ext.author:
+            # if ext.author:
             #    vuln_findings[ext.name] += dbm.search_extensions_fts(ext.author)
             if ext.description:
-                vuln_findings[ext.name] |= set(dbm.search_extensions_fts(ext.description))
+                vuln_findings[ext.name] |= set(
+                    dbm.search_extensions_fts(ext.description)
+                )
             if len(vuln_findings[ext.name]) == 0:
                 vuln_findings.pop(ext.name)
 
     for ext, findings in vuln_findings.items():
-        print(f"\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ \"{local_extensions[ext].xml_path}\"\n")
+        print(
+            f'\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ "{local_extensions[ext].xml_path}"\n'
+        )
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
         for item, score in _sorted_findings:
             print(f"(score={score}) {item.format()}\n")
         if output_dir:
-            write_csv_file(str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings])
+            write_csv_file(
+                str(output_dir / "findings.csv"), [_sf[0] for _sf in _sorted_findings]
+            )
 
     print_section_header("STEP 4: Searching NVD CVE for vunerable entries")
-    cves_findings: dict[str,set[tuple[CVEEntry, float]]] = {}
+    cves_findings: dict[str, set[tuple[CVEEntry, float]]] = {}
     with dbm:
         for ext in local_extensions.values():
             cves_findings[ext.name] = set(dbm.search_cves_fts(ext.name))
@@ -160,15 +162,22 @@ def main():
                 cves_findings.pop(ext.name)
 
     for ext, findings in cves_findings.items():
-        print(f"\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ \"{local_extensions[ext].xml_path}\"\n")
+        print(
+            f'\n[+] Found this data for extension {ext} ({local_extensions[ext].version}) @ "{local_extensions[ext].xml_path}"\n'
+        )
         _sorted_findings = sorted(findings, key=lambda x: x[1], reverse=True)
         for item, score in _sorted_findings:
             print(f"(score={score}) [{item.id}] {item.description}\n")
         if output_dir:
-            write_csv_file(str(output_dir / "cves.csv"), [_sf[0] for _sf in _sorted_findings])
+            write_csv_file(
+                str(output_dir / "cves.csv"), [_sf[0] for _sf in _sorted_findings]
+            )
 
     print_section_header("FINISHED: Remember to visit links and check")
-    print("[*] Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet")
+    print(
+        "[*] Many entries from Joomla Vunerable Extensions Feed lack version, so comparison is not implemented yet"
+    )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
